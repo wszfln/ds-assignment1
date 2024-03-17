@@ -81,6 +81,17 @@ export class AppApi extends Construct {
             REGION: "eu-west-1",
           },
         });
+        const updateMovieReviewFn = new lambdanode.NodejsFunction(this, "updateMovieReviewFn", {
+          architecture: lambda.Architecture.ARM_64,
+          runtime: lambda.Runtime.NODEJS_16_X,
+          entry: `${__dirname}/../lambdas/updateMovieReview.ts`,
+          timeout: cdk.Duration.seconds(10),
+          memorySize: 128,
+          environment: {
+            TABLE_NAME: movieReviewsTable.tableName,
+            REGION: "eu-west-1",
+          },
+        });
 
         new custom.AwsCustomResource(this, 'reviewsddbInitData', {
             onCreate: {
@@ -131,6 +142,7 @@ export class AppApi extends Construct {
         movieReviewsTable.grantWriteData(newReviewFn);
         movieReviewsTable.grantReadData(getMovieReviewsByReviewerNameFn);
         movieReviewsTable.grantReadData(getAllReviewsByReviewerNameFn);
+        movieReviewsTable.grantReadData(updateMovieReviewFn);
 
         //REST API
         const api = new apig.RestApi(this, 'RestApi', {
@@ -171,6 +183,15 @@ export class AppApi extends Construct {
         getAllReviewsByReviewerNameFnEndpoint.addMethod(
           "GET",
           new apig.LambdaIntegration(getAllReviewsByReviewerNameFn, { proxy: true })
+        );
+        movieReviewsByReviewerNameEndpoint.addMethod(
+          "PUT",
+          new apig.LambdaIntegration(updateMovieReviewFn, { proxy: true }),
+          {
+            authorizer: requestAuthorizer,
+            authorizationType: apig.AuthorizationType.CUSTOM,
+          }
         )
+    
     }
 }
