@@ -45,12 +45,21 @@ export class DsAssignment1Stack extends cdk.Stack {
     //Auth API
     this.auth = authApi.root.addResource("auth");
 
+    //signup
     this.addAuthRoute(
       "signup",
       "POST",
       "SignupFn",
       'signup.ts'
     );
+    //confirm signup
+    this.addAuthRoute(
+      "confirm_signup",
+      "POST",
+      "ConfirmFn",
+      "confirm-signup.ts"
+    );
+
 
     // Tables 
     const movieReviewsTable = new dynamodb.Table(this, 'MovieReviewsTable', {
