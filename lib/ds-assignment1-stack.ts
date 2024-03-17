@@ -49,6 +49,17 @@ export class DsAssignment1Stack extends cdk.Stack {
         REGION: "eu-west-1",
       },
     });
+    const getMovieReviewsByReviewerNameFn = new lambdanode.NodejsFunction(this, "getMovieReviewsByReviewerNameFn", {
+      architecture: lambda.Architecture.ARM_64,
+      runtime: lambda.Runtime.NODEJS_16_X,
+      entry: `${__dirname}/../lambdas/getMovieReviewsByReviewerName.ts`,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 128,
+      environment: {
+        TABLE_NAME: movieReviewsTable.tableName,
+        REGION: "eu-west-1",
+      },
+    });
 
     new custom.AwsCustomResource(this, 'reviewsddbInitData', {
       onCreate: {
@@ -71,6 +82,7 @@ export class DsAssignment1Stack extends cdk.Stack {
     // Permissions 
     movieReviewsTable.grantReadData(getMovieReviewsFn);
     movieReviewsTable.grantWriteData(newReviewFn);
+    movieReviewsTable.grantReadData(getMovieReviewsByReviewerNameFn)
 
     //REST API
     const api = new apig.RestApi(this, 'RestApi', {
@@ -97,6 +109,11 @@ export class DsAssignment1Stack extends cdk.Stack {
     reviewsEndpoint.addMethod(
       "POST",
       new apig.LambdaIntegration(newReviewFn, { proxy: true })
+    )
+    const movieReviewsByReviewerNameEndpoint = movieReviewsEndpoint.addResource("{reviewerName}");
+    movieReviewsByReviewerNameEndpoint.addMethod(
+      "GET",
+      new apig.LambdaIntegration(getMovieReviewsByReviewerNameFn, { proxy: true })
     )
      
 
