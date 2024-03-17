@@ -8,6 +8,7 @@ import { movieReviews } from '../seed/movieReviews';
 import * as apig from "aws-cdk-lib/aws-apigateway";
 import * as node from "aws-cdk-lib/aws-lambda-nodejs";
 import { Construct } from 'constructs';
+import * as iam from "aws-cdk-lib/aws-iam"
 
 type AppApiProps = {
     userPoolId: string;
@@ -92,6 +93,25 @@ export class AppApi extends Construct {
             REGION: "eu-west-1",
           },
         });
+        //IAM permissions for translate review FN to use Translate
+      const translatePolicy = iam.ManagedPolicy.fromAwsManagedPolicyName('TranslateFullAccess')     
+      const translateRole = new iam.Role(this, 'TranslateLambdaRole', {         
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com')
+      })
+      translateRole.addManagedPolicy(translatePolicy)
+      //translate review
+      const translateMovieReviewFn = new lambdanode.NodejsFunction(this, "translateMovieReviewFn", {
+        architecture: lambda.Architecture.ARM_64,
+        runtime: lambda.Runtime.NODEJS_16_X,
+        entry: `${__dirname}/../lambdas/translateMovieReview.ts`,
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 128,
+        environment: {
+          TABLE_NAME: movieReviewsTable.tableName,
+          REGION: "eu-west-1",
+        },
+        role: translateRole
+      });
 
         new custom.AwsCustomResource(this, 'reviewsddbInitData', {
             onCreate: {
@@ -142,7 +162,8 @@ export class AppApi extends Construct {
         movieReviewsTable.grantWriteData(newReviewFn);
         movieReviewsTable.grantReadData(getMovieReviewsByReviewerNameFn);
         movieReviewsTable.grantReadData(getAllReviewsByReviewerNameFn);
-        movieReviewsTable.grantReadData(updateMovieReviewFn);
+        movieReviewsTable.grantReadWriteData(updateMovieReviewFn);
+        movieReviewsTable.grantReadData(translateMovieReviewFn);
 
         //REST API
         const api = new apig.RestApi(this, 'RestApi', {
@@ -191,7 +212,12 @@ export class AppApi extends Construct {
             authorizer: requestAuthorizer,
             authorizationType: apig.AuthorizationType.CUSTOM,
           }
-        )
+        );
+        const translateMovieReviewEndpoint = movieReviewsByReviewerNameEndpoint.addResource("translate");
+        translateMovieReviewEndpoint.addMethod(
+          "GET",
+          new apig.LambdaIntegration(translateMovieReviewFn, { proxy: true })
+      )
     
     }
 }
