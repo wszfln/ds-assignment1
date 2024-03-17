@@ -70,6 +70,17 @@ export class AppApi extends Construct {
                 REGION: "eu-west-1",
             },
         });
+        const getAllReviewsByReviewerNameFn = new lambdanode.NodejsFunction(this, "getAllReviewsByReviewerNameFn", {
+          architecture: lambda.Architecture.ARM_64,
+          runtime: lambda.Runtime.NODEJS_16_X,
+          entry: `${__dirname}/../lambdas/getAllReviewsByReviewerName.ts`,
+          timeout: cdk.Duration.seconds(10),
+          memorySize: 128,
+          environment: {
+            TABLE_NAME: movieReviewsTable.tableName,
+            REGION: "eu-west-1",
+          },
+        });
 
         new custom.AwsCustomResource(this, 'reviewsddbInitData', {
             onCreate: {
@@ -119,6 +130,7 @@ export class AppApi extends Construct {
         movieReviewsTable.grantReadData(getMovieReviewsFn);
         movieReviewsTable.grantWriteData(newReviewFn);
         movieReviewsTable.grantReadData(getMovieReviewsByReviewerNameFn);
+        movieReviewsTable.grantReadData(getAllReviewsByReviewerNameFn);
 
         //REST API
         const api = new apig.RestApi(this, 'RestApi', {
@@ -155,5 +167,10 @@ export class AppApi extends Construct {
           "GET",
           new apig.LambdaIntegration(getMovieReviewsByReviewerNameFn, { proxy: true })
         );
+        const getAllReviewsByReviewerNameFnEndpoint = reviewsEndpoint.addResource("{reviewerName}")
+        getAllReviewsByReviewerNameFnEndpoint.addMethod(
+          "GET",
+          new apig.LambdaIntegration(getAllReviewsByReviewerNameFn, { proxy: true })
+        )
     }
 }
