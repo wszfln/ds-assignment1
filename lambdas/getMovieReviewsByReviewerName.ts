@@ -10,29 +10,55 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {
         const parameters = event?.pathParameters;
         console.log("Paramters:", parameters)
         const movieId = parameters?.movieId ? parseInt(parameters.movieId) : undefined;
-        const reviewerName = parameters?.reviewerName;
+        const reviewerNameOrYear = parameters?.reviewerName;
+        let isYear = false                          
+        const yearRegex = new RegExp(/^\d{4}$/) 
 
 
-        if (!movieId || !reviewerName){
+        if (!movieId || !reviewerNameOrYear){
             return {
                 statusCode: 404,
                 headers: {
                     "content-type": "application/json",
                   },
-                  body: JSON.stringify({ Message: "Missing movie Id or missing reviewer name" }),
+                  body: JSON.stringify({ Message: "Missing movie Id" }),
             };
         }
 
-        const commandOutput = await ddbDocClient.send(
-            new QueryCommand({          
+        if (yearRegex.test(reviewerNameOrYear)){       
+            isYear = true                       
+        }
+
+        let commandInput: QueryCommandInput={
+            TableName: process.env.TABLE_NAME,
+        }
+
+        if (isYear){
+            commandInput = {   
+                ...commandInput,       
+                TableName: process.env.TABLE_NAME,
+                KeyConditionExpression: "MovieId = :m",
+                FilterExpression: "begins_with(ReviewDate, :year)",
+                ExpressionAttributeValues: {
+                    ":m": movieId,
+                    ":year": reviewerNameOrYear
+                },
+            }
+        }else{
+             commandInput = {   
+                ...commandInput,               
                 TableName: process.env.TABLE_NAME,
                 KeyConditionExpression: "MovieId = :m AND ReviewerName = :rN",
                 ExpressionAttributeValues: {
                     ":m": movieId,
-                    ":rN": reviewerName
+                    ":rN": reviewerNameOrYear
                 },
-            })
-        );
+            }
+        }
+
+        const commandOutput = await ddbDocClient.send(
+            new QueryCommand(commandInput)
+        )
 
         if(!commandOutput.Items || commandOutput.Items.length === 0){       
             return {                                                       
@@ -40,7 +66,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {
                 headers: {
                     "content-type": "application/json",
                 },
-                body: JSON.stringify({ Message: "No reviews found. Verify movie Id and reviewer name and try again." }),
+                body: JSON.stringify({ Message: "No reviews found. Verify movie Id and reviewer name/review year and try again." }),
             };
         }
 
